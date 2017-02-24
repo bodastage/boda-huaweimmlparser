@@ -31,7 +31,6 @@ import javax.xml.stream.events.XMLEvent;
  * @author info@bodastage.com
  */
 public class HuaweiMMLParser {
-
     /**
      * This holds a map of the Managed Object Instances (MOIs) to the respective
      * csv print writers.
@@ -40,7 +39,6 @@ public class HuaweiMMLParser {
      */
     private Map<String, PrintWriter> moiPrintWriters 
             = new LinkedHashMap<String, PrintWriter>();
-    
     
     /**
      * 
@@ -162,6 +160,22 @@ public class HuaweiMMLParser {
      */
     private String MbscMode = null;
     
+    /**
+     * version 
+     * 
+     * @since 1,0.0
+     */
+    private String version = null;
+    
+    /**
+     * IP 
+     * 
+     * @since 1,0.0
+     */
+    private String IP = null;
+    
+    
+    
     private LinkedHashMap<String,String> attrValueMap = new LinkedHashMap<String,String>();
     
     /**
@@ -185,6 +199,20 @@ public class HuaweiMMLParser {
         if(line.startsWith("//Export start time:")){
             String [] sArray = line.split(":");
             this.dateTime = sArray[1].trim();
+            return;
+        }
+        
+        //Extract the version
+        if(line.startsWith("//For BAM version:")){
+            String [] sArray = line.split(":");
+            this.version = sArray[1].trim();
+            return;
+        }
+        
+        //Extract the IP
+        if(line.startsWith("//OMU IP:")){
+            String [] sArray = line.split(":");
+            this.IP = sArray[1].trim();
             return;
         }
         
@@ -230,7 +258,7 @@ public class HuaweiMMLParser {
                 String moiFile = outputDirectory + File.separatorChar + className +  ".csv";
                 moiPrintWriters.put(className, new PrintWriter(moiFile));
                 
-                String pNameStr = "varDateTime,BSCID,MBSC MODE";
+                String pNameStr = "varDateTime,BSCID,VERSION,IP,MBSC MODE";
                 
                 Stack attrStack = new Stack();
                 
@@ -272,7 +300,8 @@ public class HuaweiMMLParser {
                 moiPrintWriters.get(className).println(pNameStr);
             }
             
-            String pValueStr = dateTime +","+bscId+","+MbscMode;
+            String pValueStr = dateTime +","+bscId+ "," + version + "," + IP + 
+                    "," + ","+MbscMode;
             
             //Add the parameter values 
             Stack attrStack = classNameAttrsMap.get(moName);
