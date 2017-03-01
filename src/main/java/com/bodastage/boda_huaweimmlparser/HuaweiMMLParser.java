@@ -258,7 +258,7 @@ public class HuaweiMMLParser {
                 String moiFile = outputDirectory + File.separatorChar + className +  ".csv";
                 moiPrintWriters.put(className, new PrintWriter(moiFile));
                 
-                String pNameStr = "varDateTime,BSCID,VERSION,IP,MBSC MODE";
+                String pNameStr = "varDateTime,BSCID,BAM_VERSION,OMU_IP,MBSC MODE";
                 
                 Stack attrStack = new Stack();
                 
@@ -301,7 +301,7 @@ public class HuaweiMMLParser {
             }
             
             String pValueStr = dateTime +","+bscId+ "," + version + "," + IP + 
-                    "," + ","+MbscMode;
+                    ","+MbscMode;
             
             //Add the parameter values 
             Stack attrStack = classNameAttrsMap.get(moName);
