@@ -12,6 +12,9 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -173,8 +176,21 @@ public class HuaweiMMLParser {
      * @since 1,0.0
      */
     private String IP = null;
+
+    /**
+     * The file/directory to be parsed.
+     *
+     * @since 1.1.0
+     */
+    private String dataSource;
     
-    
+    /**
+     * Parser states. Currently there are only 2: extraction and parsing
+     * 
+     * @since 1.1.0
+     * @version 1.0.0
+     */
+    private int parserState = ParserStates.EXTRACTING_PARAMETERS;
     
     private LinkedHashMap<String,String> attrValueMap = new LinkedHashMap<String,String>();
     
@@ -183,16 +199,114 @@ public class HuaweiMMLParser {
      * 
      * @param filename 
      */
-    public void parse() throws FileNotFoundException, IOException{
+    public void parseFile( String inputFilename ) throws FileNotFoundException, IOException{
 
             BufferedReader br = new BufferedReader(new FileReader(this.dataFile));
             for(String line; (line = br.readLine()) != null; ) {
                 processLine(line);
             }
-            
-            closeMOPWMap();
     }
        
+    
+    /**
+     * Parser entry point 
+     * 
+     * @throws XMLStreamException
+     * @throws FileNotFoundException
+     * @throws UnsupportedEncodingException 
+     * 
+     * @since 1.1.1
+     */
+    public void parse() throws IOException {
+        //Extract parameters
+        if (parserState == ParserStates.EXTRACTING_PARAMETERS) {
+            processFileOrDirectory();
+
+            parserState = ParserStates.EXTRACTING_VALUES;
+        }
+
+        //Extracting values
+        if (parserState == ParserStates.EXTRACTING_VALUES) {
+            processFileOrDirectory();
+            parserState = ParserStates.EXTRACTING_DONE;
+        }
+        
+        closeMOPWMap();
+    }
+    
+    /**
+     * Determines if the source data file is a regular file or a directory and 
+     * parses it accordingly
+     * 
+     * @since 1.1.0
+     * @version 1.0.0
+     * @throws XMLStreamException
+     * @throws FileNotFoundException
+     * @throws UnsupportedEncodingException
+     */
+    public void processFileOrDirectory() throws IOException {
+        //this.dataFILe;
+        Path file = Paths.get(this.dataSource);
+        boolean isRegularExecutableFile = Files.isRegularFile(file)
+                & Files.isReadable(file);
+
+        boolean isReadableDirectory = Files.isDirectory(file)
+                & Files.isReadable(file);
+
+        if (isRegularExecutableFile) {
+            this.setFileName(this.dataSource);
+            baseFileName =  getFileBasename(this.dataFile);
+            
+            if( parserState == ParserStates.EXTRACTING_PARAMETERS){
+                System.out.print("Extracting parameters from " + this.baseFileName + "...");
+            }else{
+                System.out.print("Parsing " + this.baseFileName + "...");
+            }
+                    
+            this.parseFile(this.dataSource);
+            
+            if( parserState == ParserStates.EXTRACTING_PARAMETERS){
+                 System.out.println("Done.");
+            }else{
+                System.out.println("Done.");
+                //System.out.println(this.baseFileName + " successfully parsed.\n");
+            }
+        }
+
+        if (isReadableDirectory) {
+
+            File directory = new File(this.dataSource);
+
+            //get all the files from a directory
+            File[] fList = directory.listFiles();
+
+            for (File f : fList) {
+                this.setFileName(f.getAbsolutePath());
+                try {
+                    baseFileName =  getFileBasename(this.dataFile);
+                    if( parserState == ParserStates.EXTRACTING_PARAMETERS){
+                        System.out.print("Extracting parameters from " + this.baseFileName + "...");
+                    }else{
+                        System.out.print("Parsing " + this.baseFileName + "...");
+                    }
+                    
+                    //Parse
+                    this.parseFile(f.getAbsolutePath());
+                    if( parserState == ParserStates.EXTRACTING_PARAMETERS){
+                         System.out.println("Done.");
+                    }else{
+                        System.out.println("Done.");
+                        //System.out.println(this.baseFileName + " successfully parsed.\n");
+                    }
+                   
+                } catch (Exception e) {
+                    System.out.println(e.getMessage());
+                    System.out.println("Skipping file: " + this.baseFileName + "\n");
+                }
+            }
+        }
+
+    }
 
     public void processLine(String line) throws FileNotFoundException{
         //Handle first line
@@ -243,16 +357,44 @@ public class HuaweiMMLParser {
             
             this.className = moName;
             
-            //Get the parameters
-            String [] paramPartArray = paramPart.split(", ");
-            for(int i = 0, len = paramPartArray.length; i < len; i++){
-                String [] sArray = paramPartArray[i].split("=");
-                String paramName = sArray[0].trim();
-                String paramValue = sArray[1].replaceAll(";$", "");
+            //Parameter Extraction Stage
+            if(ParserStates.EXTRACTING_PARAMETERS == parserState){
+                
+                Stack attrStack = new Stack();
+                
+                //Get the parameters
+                String [] paramPartArray = paramPart.split(", ");
+                for(int i = 0, len = paramPartArray.length; i < len; i++){
+                    String [] sArray = paramPartArray[i].split("=");
+                    String paramName = sArray[0].trim();
+                    
+                    if( !attrStack.contains(paramName)){
+                        attrStack.push(paramName);
+                    }
+                }
+            
+                classNameAttrsMap.put(moName,attrStack);
+                attrValueMap.clear();
+                return; //Stop here if we on the parameter extraction stage
+            }
+            
+            
+            if(ParserStates.EXTRACTING_VALUES == parserState){
+                //Get the parameters
+                String [] paramPartArray = paramPart.split(", ");
+                for(int i = 0, len = paramPartArray.length; i < len; i++){
+                    String [] sArray = paramPartArray[i].split("=");
+                    String paramName = sArray[0].trim();
+                    String paramValue = sArray[1].replaceAll(";$", "");
 
-                attrValueMap.put(paramName, paramValue);
+                    attrValueMap.put(paramName, paramValue);
+                }
+                
             }
 
+            
+            //Continue to value extraction stage
+            
             //Add headers
             if(!moiPrintWriters.containsKey(className)){
                 String moiFile = outputDirectory + File.separatorChar + className +  ".csv";
@@ -334,25 +476,12 @@ public class HuaweiMMLParser {
             //System.out.println(pValueStr);
             
             moiPrintWriters.get(className).println(pValueStr);
+            
+            
             attrValueMap.clear();
         }
         
     }
-    
-           
-    /**
-     * Handle character events.
-     *
-     * @param xmlEvent
-     * @version 1.0.0
-     * @since 1.0.0
-     */
-    public void characterEvent(XMLEvent xmlEvent) {
-        Characters characters = xmlEvent.asCharacters();
-        if(!characters.isWhiteSpace()){
-            tagData = characters.getData(); 
-        }
-    }  
     
     /**
      * Get file base name.
@@ -468,5 +597,17 @@ public class HuaweiMMLParser {
      */
     public void setFileName(String filename ){
         this.dataFile = filename;
+    }
+    
+    
+    /**
+     * Set name of file to parser.
+     * 
+     * @since 1.0.1
+     * @version 1.0.0
+     * @param dataSource 
+     */
+    public void setDataSource(String dataSource ){
+        this.dataSource = dataSource;
     }
 }

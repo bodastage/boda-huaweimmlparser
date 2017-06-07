@@ -34,7 +34,7 @@ public class App
             }
 
             HuaweiMMLParser parser = new HuaweiMMLParser();
-            parser.setFileName(filename);
+            parser.setDataSource(filename);
             parser.setOutputDirectory(outputDirectory);
             parser.parse();
             parser.printExecutionTime();
@@ -51,7 +51,7 @@ public class App
      * @version 1.0.0
      */
     static public void showHelp(){
-        System.out.println("boda-huaweimmlparser 1.0.0. Copyright (c) 2017 Bodastage(http://www.bodastage.com)");
+        System.out.println("boda-huaweimmlparser 1.1.1. Copyright (c) 2017 Bodastage(http://www.bodastage.com)");
         System.out.println("Parses Huawei MML printouts to csv.");
         System.out.println("Usage: java -jar boda-huaweimmlparser.jar <fileToParse.xml> <outputDirectory>");
     }
