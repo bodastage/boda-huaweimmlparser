@@ -19,15 +19,6 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Stack;
-import javax.xml.stream.XMLEventReader;
-import javax.xml.stream.XMLInputFactory;
-import javax.xml.stream.XMLStreamConstants;
-import javax.xml.stream.XMLStreamException;
-import javax.xml.stream.events.Attribute;
-import javax.xml.stream.events.Characters;
-import javax.xml.stream.events.EndElement;
-import javax.xml.stream.events.StartElement;
-import javax.xml.stream.events.XMLEvent;
 
 /**
  *
@@ -124,6 +115,65 @@ public class HuaweiMMLParser {
     private Map<String,Stack> classNameAttrsMap 
             = new LinkedHashMap<String, Stack>();
     
+    /**
+     * The holds the parameters and corresponding values for the moi tag  
+     * currently being processed for Modification lines
+     * 
+     * @since 1.0.0
+     * @version 1.0.0
+     */
+    private Map<String,Stack> actClassNameAttrsMap 
+            = new LinkedHashMap<String, Stack>();
+    
+    /**
+     * The holds the parameters and corresponding values for the moi tag  
+     * currently being processed for Deactivation lines
+     * 
+     * @since 1.0.0
+     * @version 1.0.0
+     */
+    private Map<String,Stack> deaClassNameAttrsMap 
+            = new LinkedHashMap<String, Stack>();
+    
+    /**
+     * The holds the parameters and corresponding values for the moi tag  
+     * currently being processed for Blocking lines
+     * 
+     * @since 1.0.0
+     * @version 1.0.0
+     */
+    private Map<String,Stack> blkClassNameAttrsMap 
+            = new LinkedHashMap<String, Stack>();
+    
+    /**
+     * The holds the parameters and corresponding values for the moi tag  
+     * currently being processed for Un-initialize lines
+     * 
+     * @since 1.0.0
+     * @version 1.0.0
+     */
+    private Map<String,Stack> uinClassNameAttrsMap 
+            = new LinkedHashMap<String, Stack>();
+    
+    /**
+     * The holds the parameters and corresponding values for the moi tag  
+     * currently being processed for modification lines
+     * 
+     * @since 1.0.0
+     * @version 1.0.0
+     */
+    private Map<String,Stack> modClassNameAttrsMap 
+            = new LinkedHashMap<String, Stack>();
+    
+    /**
+     * The holds the parameters and corresponding values for the moi tag  
+     * currently being processed for Un-block lines
+     * 
+     * @since 1.0.0
+     * @version 1.0.0
+     */
+    private Map<String,Stack> ublClassNameAttrsMap 
+            = new LinkedHashMap<String, Stack>();
     
     /**
      * Current className MO attribute.
@@ -400,7 +450,7 @@ public class HuaweiMMLParser {
                 String moiFile = outputDirectory + File.separatorChar + className +  ".csv";
                 moiPrintWriters.put(className, new PrintWriter(moiFile));
                 
-                String pNameStr = "varDateTime,BSCID,BAM_VERSION,OMU_IP,MBSC MODE";
+                String pNameStr = "FileName,varDateTime,BSCID,BAM_VERSION,OMU_IP,MBSC MODE";
                 
                 Stack attrStack = new Stack();
                 
@@ -442,7 +492,7 @@ public class HuaweiMMLParser {
                 moiPrintWriters.get(className).println(pNameStr);
             }
             
-            String pValueStr = dateTime +","+bscId+ "," + version + "," + IP + 
+            String pValueStr = baseFileName + "," + dateTime +","+bscId+ "," + version + "," + IP + 
                     ","+MbscMode;
             
             //Add the parameter values 
@@ -459,11 +509,35 @@ public class HuaweiMMLParser {
                         String tempValue = attrValueMap.get(pName);
                         String[] valueArray = tempValue.split("&");
                         
+                        Map<String, String> paramValueMap = new LinkedHashMap<String, String>();
+                        
+                        //Iterate over the values in parameterChildMap
+                        for(int j = 0; j < valueArray.length; j++){
+                           String v = valueArray[j];
+                            String[] vArray = v.split("-");
+                            paramValueMap.put(vArray[0], toCSVFormat(vArray[1]));
+                        }
+                        
+                        //Get the child parameters 
+                        Stack childParameters = parameterChildMap.get(mvParameter);
+                        for(int idx =0; idx < childParameters.size(); idx++){
+                            String childParam = (String)childParameters.get(idx);
+                            
+                            if(paramValueMap.containsKey(childParam)){
+                                String mvValue = (String)paramValueMap.get(childParam);
+                                pValueStr += "," + toCSVFormat(mvValue);
+                            }else{
+                                pValueStr += ",";
+                            }
+                            
+                        }
+                        
+                        /**
                         for(int j = 0; j < valueArray.length; j++){
                             String v = valueArray[j];
                             String[] vArray = v.split("-");
                             pValueStr += "," + toCSVFormat(vArray[1]);
-                        }
+                        }**/
                         continue;
                     }
                     
@@ -481,6 +555,265 @@ public class HuaweiMMLParser {
             attrValueMap.clear();
         }
         
+        
+        //ACT
+        if(line.startsWith("ACT ") ){
+            extactParameterAndValues(line, "ACT");
+            return;
+        }
+        //ACT
+        if(line.startsWith("MOD ") ){
+            extactParameterAndValues(line, "MOD");
+            return;
+        }
+        //ACT
+        if(line.startsWith("DEA ") ){
+            extactParameterAndValues(line, "DEA");
+            return;
+        }
+        //ACT
+        if(line.startsWith("BLK ") ){
+            extactParameterAndValues(line, "BLK");
+            return;
+        }
+        //ACT
+        if(line.startsWith("UBL ") ){
+            extactParameterAndValues(line, "UBL");
+            return;
+        }
+        //ACT
+        if(line.startsWith("UIN ") ){
+            extactParameterAndValues(line, "UIN");
+            return;
+        }
+        
+        //
+    }
+    
+    /**
+     * 
+     * @param line
+     * @param keyWord ACT,BLK,UBK,DEA,UIN
+     */
+    private void extactParameterAndValues(String line, String keyWord) throws FileNotFoundException{
+            if( !keyWord.equals("ACT") && !keyWord.equals("BLK") &&
+                    !keyWord.equals("MOD") && !keyWord.equals("DEA") &&
+                    !keyWord.equals("UBL") &&  !keyWord.equals("UIN")
+                    ){
+                return;
+            }
+            String [] lineArray = line.split(":");
+            String moPart = lineArray[0];
+            String paramPart = lineArray[1];
+
+
+            //Get the MO
+            String [] moPartArray = moPart.split(" ");
+            String moName = moPartArray[1].trim();
+            
+            this.className = moName;
+            
+            String printWriterClassName = className + "_" + keyWord ;
+            
+            
+            //Parameter Extraction Stage
+            if(ParserStates.EXTRACTING_PARAMETERS == parserState){
+                
+                Stack attrStack = new Stack();
+                
+                //Get the parameters
+                String [] paramPartArray = paramPart.split(", ");
+                for(int i = 0, len = paramPartArray.length; i < len; i++){
+                    String [] sArray = paramPartArray[i].split("=");
+                    String paramName = sArray[0].trim();
+                    
+                    if( !attrStack.contains(paramName)){
+                        attrStack.push(paramName);
+                    }
+                }
+            
+                if(keyWord.equals("ACT")){
+                    actClassNameAttrsMap.put(moName,attrStack);
+                }
+                if(keyWord.equals("BLK")){
+                    blkClassNameAttrsMap.put(moName,attrStack);
+                }
+                if(keyWord.equals("MOD")){
+                    modClassNameAttrsMap.put(moName,attrStack);
+                }
+                if(keyWord.equals("DEA")){
+                    deaClassNameAttrsMap.put(moName,attrStack);
+                }
+                if(keyWord.equals("UBL")){
+                    ublClassNameAttrsMap.put(moName,attrStack);
+                }
+                if(keyWord.equals("UIN")){
+                    uinClassNameAttrsMap.put(moName,attrStack);
+                }
+                
+                return; //Stop here if we on the parameter extraction stage
+            }
+            
+            if(ParserStates.EXTRACTING_VALUES == parserState){
+                //Get the parameters
+                String [] paramPartArray = paramPart.split(", ");
+                for(int i = 0, len = paramPartArray.length; i < len; i++){
+                    String [] sArray = paramPartArray[i].split("=");
+                    String paramName = sArray[0].trim();
+                    String paramValue = sArray[1].replaceAll(";$", "");
+
+                    attrValueMap.put(paramName, paramValue);
+                }
+                
+            }
+            
+            //Add headers
+            if(!moiPrintWriters.containsKey(printWriterClassName)){
+                String moiFile = outputDirectory + File.separatorChar + printWriterClassName +  ".csv";
+                moiPrintWriters.put(printWriterClassName, new PrintWriter(moiFile));
+                
+                String pNameStr = "FileName,varDateTime,BSCID,BAM_VERSION,OMU_IP,MBSC MODE";
+                
+                Stack attrStack = new Stack();
+                
+                Iterator<Map.Entry<String, String>> iter 
+                        = attrValueMap.entrySet().iterator();
+                
+                while(iter.hasNext()){
+                    Map.Entry<String, String> me = iter.next();
+                    String pName = me.getKey();
+                    attrStack.push(pName);
+                    
+                    //Handle multivalued parameter or parameters with children
+                    String tempValue = attrValueMap.get(pName);
+                    if(tempValue.matches("([^-]+-[^-]+&).*")){
+                        String mvParameter = className + "_" + pName;
+                        parameterChildMap.put(mvParameter, null);
+                        Stack children = new Stack();
+                        
+                        
+                        String[] valueArray = tempValue.split("&");
+                        
+                        for(int j = 0; j < valueArray.length; j++){
+                            String v = valueArray[j];
+                            String[] vArray = v.split("-");
+                            String childParameter = vArray[0];
+                            pNameStr += "," + pName + "_" + childParameter;
+                            children.push(childParameter);
+                        }
+                        parameterChildMap.put(mvParameter, children);
+                        
+                        continue;
+                    }
+                    
+                    pNameStr = pNameStr +","+ me.getKey();
+                }
+                
+                //Initialize the MO parameter map hash map
+               if(keyWord.equals("ACT")){
+                    actClassNameAttrsMap.put(moName,attrStack);
+                }
+                if(keyWord.equals("BLK")){
+                    blkClassNameAttrsMap.put(moName,attrStack);
+                }
+                if(keyWord.equals("MOD")){
+                    modClassNameAttrsMap.put(moName,attrStack);
+                }
+                if(keyWord.equals("DEA")){
+                    deaClassNameAttrsMap.put(moName,attrStack);
+                }
+                if(keyWord.equals("UBL")){
+                    ublClassNameAttrsMap.put(moName,attrStack);
+                }
+                if(keyWord.equals("UIN")){
+                    uinClassNameAttrsMap.put(moName,attrStack);
+                }
+                
+                moiPrintWriters.get(printWriterClassName).println(pNameStr);
+            }
+            
+            String pValueStr = dateTime +","+bscId+ "," + version + "," + IP + 
+                    ","+MbscMode;
+            
+            //Add the parameter values 
+            Stack attrStack = new Stack();
+            
+               if(keyWord.equals("ACT")){
+                    attrStack = actClassNameAttrsMap.get(moName);
+                }
+                if(keyWord.equals("BLK")){
+                    attrStack = blkClassNameAttrsMap.get(moName);
+                }
+                if(keyWord.equals("MOD")){
+                    attrStack = modClassNameAttrsMap.get(moName);
+                }
+                if(keyWord.equals("DEA")){
+                    attrStack = deaClassNameAttrsMap.get(moName);
+                }
+                if(keyWord.equals("UBL")){
+                    attrStack = ublClassNameAttrsMap.get(moName);
+                }
+                if(keyWord.equals("UIN")){
+                    attrStack = uinClassNameAttrsMap.get(moName);
+                }
+                
+               
+            Iterator <String> sIter = attrStack.iterator();
+            while(sIter.hasNext()){
+                String pName = sIter.next();
+                String mvParameter = moName + "_" + pName;
+                
+                String pValue = "";
+                if(attrValueMap.containsKey(pName)){
+                    
+                    //Check whether the multi value parameter was detected
+                    if( parameterChildMap.containsKey(mvParameter)){
+                        String tempValue = attrValueMap.get(pName);
+                        String[] valueArray = tempValue.split("&");
+                        
+                        Map<String, String> paramValueMap = new LinkedHashMap<String, String>();
+                        
+                        //Iterate over the values in parameterChildMap
+                        for(int j = 0; j < valueArray.length; j++){
+                           String v = valueArray[j];
+                            String[] vArray = v.split("-");
+                            paramValueMap.put(vArray[0], toCSVFormat(vArray[1]));
+                        }
+                        
+                        //Get the child parameters 
+                        Stack childParameters = parameterChildMap.get(mvParameter);
+                        for(int idx =0; idx < childParameters.size(); idx++){
+                            String childParam = (String)childParameters.get(idx);
+                            
+                            if(paramValueMap.containsKey(childParam)){
+                                String mvValue = (String)paramValueMap.get(childParam);
+                                pValueStr += "," + toCSVFormat(mvValue);
+                            }else{
+                                pValueStr += ",";
+                            }
+                            
+                        }
+
+                        /*
+                        for(int j = 0; j < valueArray.length; j++){
+                            String v = valueArray[j];
+                            String[] vArray = v.split("-");
+                            pValueStr += "," + toCSVFormat(vArray[1]);
+                        }*/
+                        continue;
+                    }
+                    
+                    pValue = attrValueMap.get(pName);
+                }
+                
+                pValueStr += ","+ toCSVFormat(pValue);
+            }
+            
+            moiPrintWriters.get(printWriterClassName).println(pValueStr);
+            
+            
+            attrValueMap.clear();
+            className = null;
     }
     
     /**
@@ -565,11 +898,15 @@ public class HuaweiMMLParser {
     public String toCSVFormat(String s) {
         String csvValue = s;
 
+        //Strip start and end quotes
+        s = s.replaceAll("^\"|\"$", "");
+        
         //Check if value contains comma
         if (s.contains(",")) {
             csvValue = "\"" + s + "\"";
         }
 
+        
         if (s.contains("\"")) {
             csvValue = "\"" + s.replace("\"", "\"\"") + "\"";
         }

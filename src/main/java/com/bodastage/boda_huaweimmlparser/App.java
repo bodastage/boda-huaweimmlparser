@@ -1,6 +1,9 @@
 package com.bodastage.boda_huaweimmlparser;
 
 import java.io.File;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.GregorianCalendar;
 
 /**
  * Parses Huawei managed object tree Configuration Data dump from  XML to csv
@@ -11,6 +14,18 @@ public class App
     public static void main( String[] args )
     {
         try{
+            
+            //Expiry check 
+            Date expiryDate =  new GregorianCalendar(2017, Calendar.NOVEMBER, 01).getTime();
+            Date todayDate = new Date();  
+            //System.out.println(todayDate);
+            //System.out.println(expiryDate);
+            if(todayDate.after(expiryDate) ) {
+                System.out.println("Parser has expired. Please request new version from www.telecomhall.net");
+                System.exit(1);
+            }
+            
+            
             //show help
             if(args.length != 2 || (args.length == 1 && args[0] == "-h")){
                 showHelp();
@@ -51,7 +66,7 @@ public class App
      * @version 1.0.0
      */
     static public void showHelp(){
-        System.out.println("boda-huaweimmlparser 1.1.1. Copyright (c) 2017 Bodastage(http://www.bodastage.com)");
+        System.out.println("boda-huaweimmlparser 1.2.1. Copyright (c) 2017 Bodastage(http://www.bodastage.com)");
         System.out.println("Parses Huawei MML printouts to csv.");
         System.out.println("Usage: java -jar boda-huaweimmlparser.jar <fileToParse.xml> <outputDirectory>");
     }
