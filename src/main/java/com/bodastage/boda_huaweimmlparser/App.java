@@ -15,9 +15,9 @@ public class App
     {
         try{
             
-            
+            /** Remove date check permanently
             //Expiry check 
-            Date expiryDate =  new GregorianCalendar(2017, Calendar.NOVEMBER, 01).getTime();
+            Date expiryDate =  new GregorianCalendar(2018, Calendar.FEBRUARY, 01).getTime();
             Date todayDate = new Date();  
             //System.out.println(todayDate);
             //System.out.println(expiryDate);
@@ -25,13 +25,14 @@ public class App
                 System.out.println("Parser has expired. Please request new version from www.telecomhall.net");
                 System.exit(1);
             }
-            
+            **/
             
             //show help
-            if(args.length != 2 || (args.length == 1 && args[0] == "-h")){
+            if( (args.length != 2 && args.length != 3) || (args.length == 1 && args[0] == "-h")){
                 showHelp();
                 System.exit(1);
             }
+            
             //Get bulk CM XML file to parse.
             String filename = args[0];
             String outputDirectory = args[1];
@@ -50,6 +51,16 @@ public class App
             }
 
             HuaweiMMLParser parser = new HuaweiMMLParser();
+            
+            
+            if(  args.length == 3  ){
+                File f = new File(args[2]);
+                if(f.isFile()){
+                   parser.setParameterFile(args[2]);
+                   parser.getParametersToExtract(args[2]);
+                }
+            }
+            
             parser.setDataSource(filename);
             parser.setOutputDirectory(outputDirectory);
             parser.parse();

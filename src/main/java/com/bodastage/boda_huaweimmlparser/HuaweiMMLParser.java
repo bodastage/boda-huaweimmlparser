@@ -253,6 +253,13 @@ public class HuaweiMMLParser {
     
     private LinkedHashMap<String,String> attrValueMap = new LinkedHashMap<String,String>();
     
+    
+    /**
+     * File with a list of managed objects and parameters to extract.
+     * 
+     */
+    private String parameterFile = null;
+    
     /**
      * The parser's entry point.
      * 
@@ -266,6 +273,70 @@ public class HuaweiMMLParser {
             }
     }
        
+    /**
+     * Set parameter file 
+     * 
+     * @param filename 
+     */
+    public void setParameterFile(String filename){
+        parameterFile = filename;
+    }
+    
+ /**
+     * Extract parameter list from  parameter file
+     * 
+     * @param filename 
+     */
+    public  void getParametersToExtract(String filename) throws FileNotFoundException, IOException{
+        BufferedReader br = new BufferedReader(new FileReader(filename));
+        for(String line; (line = br.readLine()) != null; ) {
+           String [] moAndParameters =  line.split(":");
+           String mo = moAndParameters[0];
+           String [] parameters = moAndParameters[1].split(",");
+           
+           Stack parameterStack = new Stack();
+           for(int i =0; i < parameters.length; i++){
+               parameterStack.push(parameters[i]);
+           }
+           
+           classNameAttrsMap.put(mo, parameterStack);
+           
+           if(mo.endsWith("_ACT")){ 
+               actClassNameAttrsMap.put(mo.replace("_ACT", ""), parameterStack);
+               continue;
+           }
+           
+           if(mo.endsWith("_BLK")){ 
+               blkClassNameAttrsMap.put(mo.replace("_BLK", ""), parameterStack);
+               continue;
+           }
+           
+           if(mo.endsWith("_MOD")){ 
+               modClassNameAttrsMap.put(mo.replace("_MOD", ""), parameterStack);
+               continue;
+           }
+           
+           if(mo.endsWith("_DEA")){ 
+               deaClassNameAttrsMap.put(mo.replace("_DEA", ""), parameterStack);
+               continue;
+           }
+           
+           if(mo.endsWith("_UBL")){ 
+               ublClassNameAttrsMap.put(mo.replace("_UBL", ""), parameterStack);
+               continue;
+           }
+           
+           if(mo.endsWith("_UIN")){ 
+               uinClassNameAttrsMap.put(mo.replace("_UIN", ""), parameterStack);
+               continue;
+           }
+
+        }
+        
+        //Move to the parameter value extraction stage
+        parserState = ParserStates.EXTRACTING_VALUES;
+    }
+    
     
     /**
      * Parser entry point 
@@ -372,7 +443,7 @@ public class HuaweiMMLParser {
         //logger.debug("processLine");
         //Handle first line
         if(line.startsWith("//Export start time:")){
-            String [] sArray = line.split(":");
+            String [] sArray = line.split("time:");
             this.dateTime = sArray[1].trim();
             return;
         }
@@ -408,7 +479,7 @@ public class HuaweiMMLParser {
         //System.out.println(line);
         //Handle lines tarting with SET
         if(line.startsWith("SET ") || line.startsWith("ADD ") ){
-            
+
             String [] lineArray = line.split(":");
             String moPart = lineArray[0];
             String paramPart = lineArray[1];
@@ -418,10 +489,14 @@ public class HuaweiMMLParser {
             String moName = moPartArray[1].trim();
             
             this.className = moName;
-            //logger.debug("MO Name:" + className);
             
             //Parameter Extraction Stage
             if(ParserStates.EXTRACTING_PARAMETERS == parserState){
+                
+                if( parameterFile != null && !classNameAttrsMap.containsKey(className) ){
+                    attrValueMap.clear();
+                    return;
+                }
                 
                 Stack attrStack = new Stack();
                 
@@ -435,7 +510,12 @@ public class HuaweiMMLParser {
                     String [] sArray = paramPartArray[i].split("=");
                     String paramName = sArray[0].trim();
                     
-                    if( !attrStack.contains(paramName)){
+                    //Skip if the parameter is not in the pFile
+                    if( !attrStack.contains(paramName) && parameterFile != null ){
+                        continue;
+                    }
+                    
+                    if( !attrStack.contains(paramName) ){
                         attrStack.push(paramName);
                     }
                     
@@ -471,8 +551,6 @@ public class HuaweiMMLParser {
 
                 }
             
-                
- 
                 classNameAttrsMap.put(moName,attrStack);
                 attrValueMap.clear();
                 return; //Stop here if we on the parameter extraction stage
@@ -488,23 +566,40 @@ public class HuaweiMMLParser {
                     String paramValue = sArray[1].replaceAll(";$", "");
 
                     attrValueMap.put(paramName, paramValue);
-                }
-                
+                }   
             }
             
             //Continue to value extraction stage
-            
+            if(parameterFile != null && !classNameAttrsMap.containsKey(className) ){
+                 attrValueMap.clear();
+                return;
+            }
+
             //Add headers
-            if(!moiPrintWriters.containsKey(className)){
+            //If there is no parameterFile or if the parameter file exists and the mo is in the classNameAttrsMap
+            if( !moiPrintWriters.containsKey(className) ) {
                 String moiFile = outputDirectory + File.separatorChar + className +  ".csv";
                 moiPrintWriters.put(className, new PrintWriter(moiFile));
                 
                 String pNameStr = "FileName,varDateTime,BSCID,BAM_VERSION,OMU_IP,MBSC MODE";
                 
+                //This list of parameters are added by default. Ignore to prevent duplicates
+                //String ignoreList = "FileName,varDateTime,BSCID,BAM_VERSION,OMU_IP,MBSC MODE";
+                
                 Stack attrStack =classNameAttrsMap.get(className);
                 
                 for(int y =0; y < attrStack.size(); y++){
                     String pName = (String)attrStack.get(y);
+                    
+                    //@TODO: Skip parameter that are added by default
+                    if( pName.toLowerCase().equals("filename") || 
+                        pName.toLowerCase().equals("vardatetime") || 
+                        pName.toLowerCase().equals("bscid") || 
+                        pName.toLowerCase().equals("bam_version") ||
+                        pName.toLowerCase().equals("omu_ip") || 
+                        pName.toLowerCase().equals("mbsc mode") ) continue;
+                    //if(ignoreList.contains(pName)) continue;
+                    
                     String mvParameter = moName + "_" + pName;
                     
                     //Handle multivalued parameter (parameters with children)
@@ -536,6 +631,15 @@ public class HuaweiMMLParser {
             Iterator <String> sIter = attrStack.iterator();
             while(sIter.hasNext()){
                 String pName = sIter.next();
+                
+                //@TODO: Skip parameter that are added by default
+                if( pName.toLowerCase().equals("filename") || 
+                    pName.toLowerCase().equals("vardatetime") || 
+                    pName.toLowerCase().equals("bscid") || 
+                    pName.toLowerCase().equals("bam_version") ||
+                    pName.toLowerCase().equals("omu_ip") || 
+                    pName.toLowerCase().equals("mbsc mode") ) continue;
+
                 String mvParameter = moName + "_" + pName;
                 
                 String pValue = "";
@@ -656,9 +760,13 @@ public class HuaweiMMLParser {
             
             String printWriterClassName = className + "_" + keyWord ;
             
-            
             //Parameter Extraction Stage
             if(ParserStates.EXTRACTING_PARAMETERS == parserState){
+                
+                if( parameterFile != null && !classNameAttrsMap.containsKey(printWriterClassName) ){
+                    attrValueMap.clear();
+                    return;
+                }
                 
                 Stack attrStack = new Stack();
                 
@@ -667,6 +775,11 @@ public class HuaweiMMLParser {
                 for(int i = 0, len = paramPartArray.length; i < len; i++){
                     String [] sArray = paramPartArray[i].split("=");
                     String paramName = sArray[0].trim();
+                    
+                    //Skip if the parameter is not in the pFile
+                    if( !attrStack.contains(paramName) && parameterFile != null ){
+                        continue;
+                    }
                     
                     if( !attrStack.contains(paramName)){
                         attrStack.push(paramName);
@@ -698,24 +811,28 @@ public class HuaweiMMLParser {
                     }
                 }
             
-                if(keyWord.equals("ACT")){
-                    actClassNameAttrsMap.put(moName,attrStack);
+                if(parameterFile == null ){
+                    if(keyWord.equals("ACT")){
+                        actClassNameAttrsMap.put(moName,attrStack);
+                    }
+                    if(keyWord.equals("BLK")){
+                        blkClassNameAttrsMap.put(moName,attrStack);
+                    }
+                    if(keyWord.equals("MOD")){
+                        modClassNameAttrsMap.put(moName,attrStack);
+                    }
+                    if(keyWord.equals("DEA")){
+                        deaClassNameAttrsMap.put(moName,attrStack);
+                    }
+                    if(keyWord.equals("UBL")){
+                        ublClassNameAttrsMap.put(moName,attrStack);
+                    }
+                    if(keyWord.equals("UIN")){
+                        uinClassNameAttrsMap.put(moName,attrStack);
+                    }
                 }
-                if(keyWord.equals("BLK")){
-                    blkClassNameAttrsMap.put(moName,attrStack);
-                }
-                if(keyWord.equals("MOD")){
-                    modClassNameAttrsMap.put(moName,attrStack);
-                }
-                if(keyWord.equals("DEA")){
-                    deaClassNameAttrsMap.put(moName,attrStack);
-                }
-                if(keyWord.equals("UBL")){
-                    ublClassNameAttrsMap.put(moName,attrStack);
-                }
-                if(keyWord.equals("UIN")){
-                    uinClassNameAttrsMap.put(moName,attrStack);
-                }
+                
+
                 
                 return; //Stop here if we on the parameter extraction stage
             }
@@ -733,6 +850,13 @@ public class HuaweiMMLParser {
                 
             }
             
+            //Continue to value extraction stage
+            //printWriterClassName=className_<MOD}|BLK|...>
+            if(parameterFile != null && !classNameAttrsMap.containsKey(printWriterClassName) ){
+                 attrValueMap.clear();
+                return;
+            }
+            
             //Add headers
             if(!moiPrintWriters.containsKey(printWriterClassName)){
                 String moiFile = outputDirectory + File.separatorChar + printWriterClassName +  ".csv";
@@ -742,68 +866,108 @@ public class HuaweiMMLParser {
                 
                 Stack attrStack = new Stack();
                 
-                Iterator<Map.Entry<String, String>> iter 
-                        = attrValueMap.entrySet().iterator();
-                
-                while(iter.hasNext()){
-                    Map.Entry<String, String> me = iter.next();
-                    String pName = me.getKey();
-                    attrStack.push(pName);
-                    
-                    //Handle multivalued parameter or parameters with children
-                    String tempValue = attrValueMap.get(pName);
-                    if(tempValue.matches("([^-]+-[^-]+&).*") ){
-                        String mvParameter = className + "_" + pName;
-                        parameterChildMap.put(mvParameter, null);
-                        Stack children = new Stack();
-                        
-                        
-                        String[] valueArray = tempValue.split("&");
-                        
-                        for(int j = 0; j < valueArray.length; j++){
-                            String v = valueArray[j];
-                            String[] vArray = v.split("-");
-                            String childParameter = vArray[0];
-                            pNameStr += "," + pName + "_" + childParameter;
-                            children.push(childParameter);
+                if( parameterFile == null ){
+                    Iterator<Map.Entry<String, String>> iter 
+                            = attrValueMap.entrySet().iterator();
+
+                    while(iter.hasNext()){
+                        Map.Entry<String, String> me = iter.next();
+                        String pName = me.getKey();
+                        attrStack.push(pName);
+
+                        //Handle multivalued parameter or parameters with children
+                        String tempValue = attrValueMap.get(pName);
+                        if(tempValue.matches("([^-]+-[^-]+&).*") ){
+                            String mvParameter = className + "_" + pName;
+                            parameterChildMap.put(mvParameter, null);
+                            Stack children = new Stack();
+
+
+                            String[] valueArray = tempValue.split("&");
+
+                            for(int j = 0; j < valueArray.length; j++){
+                                String v = valueArray[j];
+                                String[] vArray = v.split("-");
+                                String childParameter = vArray[0];
+                                pNameStr += "," + pName + "_" + childParameter;
+                                children.push(childParameter);
+                            }
+                            parameterChildMap.put(mvParameter, children);
+
+                            continue;
                         }
-                        parameterChildMap.put(mvParameter, children);
-                        
-                        continue;
+
+                        pNameStr = pNameStr +","+ me.getKey();
                     }
+                
+                }else{
                     
-                    pNameStr = pNameStr +","+ me.getKey();
+                    //Cases where the parameter list is provided in the parameter file
+                    attrStack =classNameAttrsMap.get(printWriterClassName);
+                    
+                    for(int y =0; y < attrStack.size(); y++){
+                        String pName = (String)attrStack.get(y);
+
+                        //@TODO: Skip parameter that are added by default
+                        if( pName.toLowerCase().equals("filename") || 
+                            pName.toLowerCase().equals("vardatetime") || 
+                            pName.toLowerCase().equals("bscid") || 
+                            pName.toLowerCase().equals("bam_version") ||
+                            pName.toLowerCase().equals("omu_ip") || 
+                            pName.toLowerCase().equals("mbsc mode") ) continue;
+                        //if(ignoreList.contains(pName)) continue;
+
+                        String mvParameter = moName + "_" + pName;
+
+                        //Handle multivalued parameter (parameters with children)
+                        if( parameterChildMap.containsKey(mvParameter)){
+                            //Get the child parameters 
+                            Stack childParameters = parameterChildMap.get(mvParameter);
+                            for(int idx =0; idx < childParameters.size(); idx++){
+                                String childParam = (String)childParameters.get(idx);
+                                pNameStr = pNameStr +","+ pName + "_" + childParam;
+                            }
+                            continue;
+                        }
+
+                        pNameStr = pNameStr +","+ pName;
+                    }
                 }
                 
-                //Initialize the MO parameter map hash map
-               if(keyWord.equals("ACT")){
-                    actClassNameAttrsMap.put(moName,attrStack);
+
+                
+                if( parameterFile == null ){
+                    //Initialize the MO parameter map hash map
+                   if(keyWord.equals("ACT")){
+                        actClassNameAttrsMap.put(moName,attrStack);
+                    }
+                    if(keyWord.equals("BLK")){
+                        blkClassNameAttrsMap.put(moName,attrStack);
+                    }
+                    if(keyWord.equals("MOD")){
+                        modClassNameAttrsMap.put(moName,attrStack);
+                    }
+                    if(keyWord.equals("DEA")){
+                        deaClassNameAttrsMap.put(moName,attrStack);
+                    }
+                    if(keyWord.equals("UBL")){
+                        ublClassNameAttrsMap.put(moName,attrStack);
+                    }
+                    if(keyWord.equals("UIN")){
+                        uinClassNameAttrsMap.put(moName,attrStack);
+                    }
                 }
-                if(keyWord.equals("BLK")){
-                    blkClassNameAttrsMap.put(moName,attrStack);
-                }
-                if(keyWord.equals("MOD")){
-                    modClassNameAttrsMap.put(moName,attrStack);
-                }
-                if(keyWord.equals("DEA")){
-                    deaClassNameAttrsMap.put(moName,attrStack);
-                }
-                if(keyWord.equals("UBL")){
-                    ublClassNameAttrsMap.put(moName,attrStack);
-                }
-                if(keyWord.equals("UIN")){
-                    uinClassNameAttrsMap.put(moName,attrStack);
-                }
+
                 
                 moiPrintWriters.get(printWriterClassName).println(pNameStr);
             }
             
-            String pValueStr = dateTime +","+bscId+ "," + version + "," + IP + 
+            String pValueStr = baseFileName + "," + dateTime +","+bscId+ "," + version + "," + IP + 
                     ","+MbscMode;
             
             //Add the parameter values 
             Stack attrStack = new Stack();
-            
+
                if(keyWord.equals("ACT")){
                     attrStack = actClassNameAttrsMap.get(moName);
                 }
@@ -827,6 +991,14 @@ public class HuaweiMMLParser {
             Iterator <String> sIter = attrStack.iterator();
             while(sIter.hasNext()){
                 String pName = sIter.next();
+                
+                if( pName.toLowerCase().equals("filename") || 
+                    pName.toLowerCase().equals("vardatetime") || 
+                    pName.toLowerCase().equals("bscid") || 
+                    pName.toLowerCase().equals("bam_version") ||
+                    pName.toLowerCase().equals("omu_ip") || 
+                    pName.toLowerCase().equals("mbsc mode") ) continue;
+
                 String mvParameter = moName + "_" + pName;
                 
                 String pValue = "";
