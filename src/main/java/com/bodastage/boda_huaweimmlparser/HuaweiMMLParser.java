@@ -28,10 +28,10 @@ import java.util.Stack;
  */
 public class HuaweiMMLParser {
 
-    //Logger logger;
+    Logger logger = LoggerFactory.getLogger(HuaweiMMLParser.class);
     
     public HuaweiMMLParser(){
-        //logger = LoggerFactory.getLogger(HuaweiMMLParser.class);
+        
     }
     
     /**
@@ -581,7 +581,7 @@ public class HuaweiMMLParser {
                 String moiFile = outputDirectory + File.separatorChar + className +  ".csv";
                 moiPrintWriters.put(className, new PrintWriter(moiFile));
                 
-                String pNameStr = "FileName,varDateTime,BSCID,BAM_VERSION,OMU_IP,MBSC MODE";
+                String pNameStr = "FILENAME,DATETIME,BSCID,BAM_VERSION,OMU_IP,MBSC MODE";
                 
                 //This list of parameters are added by default. Ignore to prevent duplicates
                 //String ignoreList = "FileName,varDateTime,BSCID,BAM_VERSION,OMU_IP,MBSC MODE";
@@ -593,7 +593,7 @@ public class HuaweiMMLParser {
                     
                     //@TODO: Skip parameter that are added by default
                     if( pName.toLowerCase().equals("filename") || 
-                        pName.toLowerCase().equals("vardatetime") || 
+                        pName.toLowerCase().equals("datetime") || 
                         pName.toLowerCase().equals("bscid") || 
                         pName.toLowerCase().equals("bam_version") ||
                         pName.toLowerCase().equals("omu_ip") || 
@@ -634,7 +634,7 @@ public class HuaweiMMLParser {
                 
                 //@TODO: Skip parameter that are added by default
                 if( pName.toLowerCase().equals("filename") || 
-                    pName.toLowerCase().equals("vardatetime") || 
+                    pName.toLowerCase().equals("datetime") || 
                     pName.toLowerCase().equals("bscid") || 
                     pName.toLowerCase().equals("bam_version") ||
                     pName.toLowerCase().equals("omu_ip") || 
@@ -643,57 +643,56 @@ public class HuaweiMMLParser {
                 String mvParameter = moName + "_" + pName;
                 
                 String pValue = "";
-                if(attrValueMap.containsKey(pName)){
-
-                    if( parameterChildMap.containsKey(mvParameter)){
-                        
-                        //Fix for bug where parser can't tell if parametr is multivalued or not
-                        //ADD CLKSRC:SRCGRD=1, SRCT=LINE1_8KHZ;
-                        //ADD CLKSRC:SRCGRD=2, SRCT=BITS1-2MHZ;
-                        if(!attrValueMap.containsKey(pName)){
-                            pValueStr += ",";
-                            continue;
-                        }
-                        String tempValue = attrValueMap.get(pName);
-                        String[] valueArray = tempValue.split("&");
-                        
-                        //logger.debug("mvParameter value:" + tempValue);
-                        
-                        Map<String, String> paramValueMap = new LinkedHashMap<String, String>();
-                        
-                        //Iterate over the values in parameterChildMap
-                        for(int j = 0; j < valueArray.length; j++){
-                           String v = valueArray[j];
-                            String[] vArray = v.split("-");
-                            paramValueMap.put(vArray[0], toCSVFormat(vArray[1]));
-                        }
-                        
-                        //Get the child parameters 
-                        Stack childParameters = parameterChildMap.get(mvParameter);
-                        for(int idx =0; idx < childParameters.size(); idx++){
-                            String childParam = (String)childParameters.get(idx);
-                            
-                            if(paramValueMap.containsKey(childParam)){
-                                String mvValue = (String)paramValueMap.get(childParam);
-                                pValueStr += "," + toCSVFormat(mvValue);
-                            }else{
-                                pValueStr += ",";
-                            }
-                            
-                        }
-
-                        continue;
-                    }
+                
+                if( parameterChildMap.containsKey(mvParameter)){
                     
-                    pValue = attrValueMap.get(pName);
+                    //Fix for bug where parser can't tell if parametr is multivalued or not
+                    //ADD CLKSRC:SRCGRD=1, SRCT=LINE1_8KHZ;
+                    //ADD CLKSRC:SRCGRD=2, SRCT=BITS1-2MHZ;
+                    
+                    ///if(!attrValueMap.containsKey(pName)){
+                    //    pValueStr += ",";
+                    //    continue;
+                    //}
+                    
+                    String tempValue = "";
+                    String[] valueArray = {};
+                    if(attrValueMap.containsKey(pName)){
+                        tempValue = attrValueMap.get(pName);
+                         valueArray = tempValue.split("&");
+                    }
+
+                    Map<String, String> paramValueMap = new LinkedHashMap<String, String>();
+
+                    //Iterate over the values in parameterChildMap
+                    for(int j = 0; j < valueArray.length; j++){
+                       String v = valueArray[j];
+                        String[] vArray = v.split("-");
+                        paramValueMap.put(vArray[0], vArray[1]);
+                    }
+
+                    //Get the child parameters 
+                    Stack childParameters = parameterChildMap.get(mvParameter);
+                    for(int idx =0; idx < childParameters.size(); idx++){
+                        String childParam = (String)childParameters.get(idx);
+
+                        if(paramValueMap.containsKey(childParam)){
+                            String mvValue = (String)paramValueMap.get(childParam);
+                            pValueStr += "," + toCSVFormat(mvValue);
+                        }else{
+                            pValueStr += ",";
+                        }
+
+                    }
+
+                    continue;
                 }
                 
+                if(attrValueMap.containsKey(pName)) { 
+                    pValue = attrValueMap.get(pName);
+                }
                 pValueStr += ","+ toCSVFormat(pValue);
             }
-
-            //System.out.println(moName);
-            //System.out.println("*****************");
-            //System.out.println(pValueStr);
             
             moiPrintWriters.get(className).println(pValueStr);
             
@@ -862,7 +861,7 @@ public class HuaweiMMLParser {
                 String moiFile = outputDirectory + File.separatorChar + printWriterClassName +  ".csv";
                 moiPrintWriters.put(printWriterClassName, new PrintWriter(moiFile));
                 
-                String pNameStr = "FileName,varDateTime,BSCID,BAM_VERSION,OMU_IP,MBSC MODE";
+                String pNameStr = "FILENAME,DATETIME,BSCID,BAM_VERSION,OMU_IP,MBSC MODE";
                 
                 Stack attrStack = new Stack();
                 
@@ -910,7 +909,7 @@ public class HuaweiMMLParser {
 
                         //@TODO: Skip parameter that are added by default
                         if( pName.toLowerCase().equals("filename") || 
-                            pName.toLowerCase().equals("vardatetime") || 
+                            pName.toLowerCase().equals("datetime") || 
                             pName.toLowerCase().equals("bscid") || 
                             pName.toLowerCase().equals("bam_version") ||
                             pName.toLowerCase().equals("omu_ip") || 
@@ -993,7 +992,7 @@ public class HuaweiMMLParser {
                 String pName = sIter.next();
                 
                 if( pName.toLowerCase().equals("filename") || 
-                    pName.toLowerCase().equals("vardatetime") || 
+                    pName.toLowerCase().equals("datetime") || 
                     pName.toLowerCase().equals("bscid") || 
                     pName.toLowerCase().equals("bam_version") ||
                     pName.toLowerCase().equals("omu_ip") || 
