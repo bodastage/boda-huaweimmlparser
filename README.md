@@ -4,7 +4,24 @@
 Coverts Huawei 2G,3G, and 4G CFGMML dumps to csv.
 
 # Usage
-java -jar  huaweimmlparser.jar data.mml outputDirectory
+```
+usage: java -jar boda-huaweimmlparser.jar
+Parses Huawei CFGMML files to csv
+
+ -c,--parameter-config <PARAMETER_CONFIG>   parameter configuration file
+ -h,--help                                  show help
+ -i,--input-file <INPUT_FILE>               input file or directory name
+ -o,--output-directory <OUTPUT_DIRECTORY>   output directory name
+ -p,--extract-parameters                    extract only the managed
+                                            objects and parameters
+ -v,--version                               display version
+
+Examples:
+java -jar boda-huaweimmlparser.jar -i cfgmml_dump.txt -o out_folder
+java -jar boda-huaweimmlparser.jar -i input_folder -o out_folder
+
+Copyright (c) 2019 Bodastage Solutions(http://www.bodastage.com)
+```
 
 # Download and installation
 The lastest compiled jar file is availabled in the dist directory. Alternatively, download it directly from [here](https://github.com/bodastage/boda-huaweimmlparser/raw/master/dist/boda-huaweimmlparser.jar).

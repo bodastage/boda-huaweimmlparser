@@ -21,6 +21,13 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Stack;
+import org.apache.commons.cli.Options;
+import org.apache.commons.cli.CommandLineParser;
+import org.apache.commons.cli.DefaultParser;
+import org.apache.commons.cli.CommandLine;
+import org.apache.commons.cli.ParseException;
+import org.apache.commons.cli.HelpFormatter;
+import org.apache.commons.cli.Option;
 
 /**
  *
@@ -28,6 +35,14 @@ import java.util.Stack;
  */
 public class HuaweiMMLParser {
 
+    /**
+     * Current release version 
+     * 
+     * Since 1.3.0
+     */
+    final static String VERSION = "1.3.0";
+    
+    
     Logger logger = LoggerFactory.getLogger(HuaweiMMLParser.class);
     
     public HuaweiMMLParser(){
@@ -237,6 +252,175 @@ public class HuaweiMMLParser {
     private String IP = null;
 
     /**
+     * Extract managed objects and their parameters
+     */
+    private Boolean extractParametersOnly = false;
+    
+    /**
+     * Add meta fields to each MO. FILENAME, DATETIME
+     */
+    private Boolean extractMetaFields = false;
+    
+    public void setExtractParametersOnly(Boolean bool){
+        extractParametersOnly = bool;
+    }
+    
+    public void setExtractMetaFields(Boolean bool){
+        extractMetaFields = bool;
+    }
+    
+    public static void main( String[] args )
+    {
+        
+       Options options = new Options();
+       CommandLine cmd = null;
+       String outputDirectory = null;   
+       String inputFile = null;
+       String parameterConfigFile = null;
+       Boolean onlyExtractParameters = false;
+       Boolean showHelpMessage = false;
+       Boolean showVersion = false;
+       Boolean attachMetaFields = false; //Attach mattachMetaFields FILENAME,DATETIME,NE_TECHNOLOGY,NE_VENDOR,NE_VERSION,NE_TYPE
+       
+       try{ 
+            options.addOption( "p", "extract-parameters", false, "extract only the managed objects and parameters" );
+            options.addOption( "v", "version", false, "display version" );
+//            options.addOption( "m", "meta-fields", false, "add meta fields to extracted parameters. FILENAME,DATETIME" );
+            options.addOption( Option.builder("i")
+                    .longOpt( "input-file" )
+                    .desc( "input file or directory name")
+                    .hasArg()
+                    .argName( "INPUT_FILE" ).build());
+            options.addOption(Option.builder("o")
+                    .longOpt( "output-directory" )
+                    .desc( "output directory name")
+                    .hasArg()
+                    .argName( "OUTPUT_DIRECTORY" ).build());
+            options.addOption(Option.builder("c")
+                    .longOpt( "parameter-config" )
+                    .desc( "parameter configuration file")
+                    .hasArg()
+                    .argName( "PARAMETER_CONFIG" ).build() );
+            options.addOption( "h", "help", false, "show help" );
+            
+            //Parse command line arguments
+            CommandLineParser parser = new DefaultParser();
+            cmd = parser.parse( options, args);
+
+            if( cmd.hasOption("h")){
+                showHelpMessage = true;
+            }
+
+            if( cmd.hasOption("v")){
+                showVersion = true;
+            }
+            
+            if(cmd.hasOption('o')){
+                outputDirectory = cmd.getOptionValue("o"); 
+            }
+            
+            if(cmd.hasOption('i')){
+                inputFile = cmd.getOptionValue("i"); 
+            }
+            
+            if(cmd.hasOption('c')){
+                parameterConfigFile = cmd.getOptionValue("c"); 
+            }
+            
+            if(cmd.hasOption('p')){
+                onlyExtractParameters  = true;
+            }
+            
+            if(cmd.hasOption('m')){
+                attachMetaFields  = true;
+            }
+            
+       }catch(IllegalArgumentException e){
+           
+       } catch (ParseException ex) {
+//            java.util.logging.Logger.getLogger(HuaweiCMObjectParser.class.getName()).log(Level.SEVERE, null, ex);
+        }
+       
+       
+        try{
+            
+            if(showVersion == true ){
+                System.out.println(VERSION);
+                System.out.println("Copyright (c) 2019 Bodastage Solutions(http://www.bodastage.com)");
+                System.exit(0);
+            }
+            
+            //show help
+            if( showHelpMessage == true || 
+                inputFile == null || 
+                ( outputDirectory == null && onlyExtractParameters == false) ){
+                     HelpFormatter formatter = new HelpFormatter();
+                     String header = "Parses Huawei CFGMML files to csv\n\n";
+                     String footer = "\n";
+                     footer += "Examples: \n";
+                     footer += "java -jar boda-huaweimmlparser.jar -i cfgmml_dump.txt -o out_folder\n";
+                     footer += "java -jar boda-huaweimmlparser.jar -i input_folder -o out_folder\n";
+                     footer += "\nCopyright (c) 2019 Bodastage Solutions(http://www.bodastage.com)";
+                     formatter.printHelp( "java -jar boda-huaweimmlparser.jar", header, options, footer );
+                     System.exit(0);
+            }
+        
+            //Confirm that the output directory is a directory and has write 
+            //privileges
+            if(outputDirectory != null ){
+                File fOutputDir = new File(outputDirectory);
+                if (!fOutputDir.isDirectory()) {
+                    System.err.println("ERROR: The specified output directory is not a directory!.");
+                    System.exit(1);
+                }
+
+                if (!fOutputDir.canWrite()) {
+                    System.err.println("ERROR: Cannot write to output directory!");
+                    System.exit(1);
+                }
+            }
+            
+            
+
+            //Get parser instance
+            HuaweiMMLParser cmParser = new HuaweiMMLParser();
+
+
+            if(onlyExtractParameters == true ){
+                cmParser.setExtractParametersOnly(true);
+            }
+            
+            if( attachMetaFields == true ){
+                cmParser.setExtractMetaFields(true);
+            }
+            
+            if(  parameterConfigFile != null ){
+                File f = new File(parameterConfigFile);
+                if(f.isFile()){
+                    cmParser.setParameterFile(parameterConfigFile);
+                    cmParser.getParametersToExtract(parameterConfigFile);
+                    cmParser.parserState = ParserStates.EXTRACTING_VALUES;
+                }
+            }
+            
+            
+            cmParser.setDataSource(inputFile);
+            if(outputDirectory != null ) cmParser.setOutputDirectory(outputDirectory);
+
+            cmParser.setOutputDirectory(outputDirectory);
+            cmParser.parse();
+            cmParser.printExecutionTime();
+            
+        }catch(Exception e){
+            System.out.println(e.getMessage());
+            System.exit(1);
+        }
+
+
+    }
+    
+    
+    /**
      * The file/directory to be parsed.
      *
      * @since 1.1.0
@@ -281,6 +465,7 @@ public class HuaweiMMLParser {
     public void setParameterFile(String filename){
         parameterFile = filename;
     }
+    
     
  /**
      * Extract parameter list from  parameter file
