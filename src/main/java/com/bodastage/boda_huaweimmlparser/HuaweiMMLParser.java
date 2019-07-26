@@ -21,6 +21,8 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Stack;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.DefaultParser;
@@ -40,7 +42,7 @@ public class HuaweiMMLParser {
      * 
      * Since 1.3.0
      */
-    final static String VERSION = "1.3.0";
+    final static String VERSION = "1.3.1";
     
     
     Logger logger = LoggerFactory.getLogger(HuaweiMMLParser.class);
@@ -74,6 +76,15 @@ public class HuaweiMMLParser {
      * @version 1.0.0
      */
     private String tagData = "";
+    
+    /**
+     * Line number
+     * 
+     * Tracks line numbers 
+     * 
+     * @since 1.3.1
+     */
+    private Integer lineNumber = 0;
     
     /**
      * Output directory.
@@ -380,6 +391,20 @@ public class HuaweiMMLParser {
                 }
             }
             
+            //Confirm that the output directory is a directory and has write 
+            //privileges
+            if(outputDirectory != null ){
+                File fOutputDir = new File(outputDirectory);
+                if (!fOutputDir.isDirectory()) {
+                    System.err.println("ERROR: The specified output directory is not a directory!.");
+                    System.exit(1);
+                }
+
+                if (!fOutputDir.canWrite()) {
+                    System.err.println("ERROR: Cannot write to output directory!");
+                    System.exit(1);
+                }
+            }
             
 
             //Get parser instance
@@ -539,7 +564,10 @@ public class HuaweiMMLParser {
 
             parserState = ParserStates.EXTRACTING_VALUES;
         }
-
+        
+        //Reset line count
+        lineNumber = 0;
+                
         //Extracting values
         if (parserState == ParserStates.EXTRACTING_VALUES) {
             processFileOrDirectory();
@@ -617,6 +645,7 @@ public class HuaweiMMLParser {
                    
                 } catch (Exception e) {
                     System.out.println(e.getMessage());
+                    System.out.println("Error at line:" + lineNumber + " className:" + className);
                     System.out.println("Skipping file: " + this.baseFileName + "\n");
                 }
             }
@@ -625,8 +654,10 @@ public class HuaweiMMLParser {
     }
 
     public void processLine(String line) throws FileNotFoundException{
+        ++lineNumber;
         //logger.debug("processLine");
         //Handle first line
+        
         if(line.startsWith("//Export start time:")){
             String [] sArray = line.split("time:");
             this.dateTime = sArray[1].trim();
@@ -672,7 +703,7 @@ public class HuaweiMMLParser {
             //Get the MO
             String [] moPartArray = moPart.split(" ");
             String moName = moPartArray[1].trim();
-            
+
             this.className = moName;
             
             //Parameter Extraction Stage
@@ -688,9 +719,12 @@ public class HuaweiMMLParser {
                 if(classNameAttrsMap.containsKey(moName)){ //this.className
                       attrStack = classNameAttrsMap.get(moName);
                 }
-               
+
                 //Get the parameters
-                String [] paramPartArray = paramPart.split(", ");
+                //(?<=[^=]+=[^=]+),\s(?=[^=^"]+=[^=]+) --
+                //(?<=[^=]+),\\s(?=[^=^\"]+=[^=]+)
+                String [] paramPartArray = paramPart.split("(?<=[^=]+),\\s(?=[^=^\"]+=[^=]+)");
+                
                 for(int i = 0, len = paramPartArray.length; i < len; i++){
                     String [] sArray = paramPartArray[i].split("=");
                     String paramName = sArray[0].trim();
@@ -705,8 +739,10 @@ public class HuaweiMMLParser {
                     }
                     
                     //Collect multivalue parameters 
-                     String tempValue  = sArray[1].trim();
-                     if(tempValue.matches("([^-]+-[^-]+&).*")  ){
+                    //Skip/ignore parameters that end with NAME such GSMCELLNAME. The reason for this is 
+                    //when there is hypen the parser was mistakenly treating the parameter has multivalued
+                    String tempValue  = sArray[1].trim();
+                    if(tempValue.matches("([^-]+-[^-]+&).*") && !paramName.endsWith("NAME")){
                          String mvParameter = className + "_" + paramName;
                         //logger.debug("mvParameter: " + mvParameter);
                         //System.out.println("mvParameter:" + mvParameter);
@@ -726,8 +762,7 @@ public class HuaweiMMLParser {
                              String childParameter = vArray[0];
                              if( !children.contains(childParameter)){
                                  children.push(childParameter);
-                             }
-                             
+                             }   
                          }
                          
                          parameterChildMap.put(mvParameter, children);
@@ -735,16 +770,16 @@ public class HuaweiMMLParser {
                      //EOF: MV Parameters
 
                 }
-            
+                
                 classNameAttrsMap.put(moName,attrStack);
                 attrValueMap.clear();
                 return; //Stop here if we on the parameter extraction stage
             }
             
-            
             if(ParserStates.EXTRACTING_VALUES == parserState){
                 //Get the parameters
-                String [] paramPartArray = paramPart.split(", ");
+                //String [] paramPartArray = paramPart.split("(?<=[^=]+=[^=]+),\\s(?=[^=^\"]+=[^=]+)");
+                String [] paramPartArray = paramPart.split("(?<=[^=]+),\\s(?=[^=^\"]+=[^=]+)");
                 for(int i = 0, len = paramPartArray.length; i < len; i++){
                     String [] sArray = paramPartArray[i].split("=");
                     String paramName = sArray[0].trim();
@@ -770,7 +805,6 @@ public class HuaweiMMLParser {
                 
                 //This list of parameters are added by default. Ignore to prevent duplicates
                 //String ignoreList = "FileName,varDateTime,BSCID,BAM_VERSION,OMU_IP,MBSC MODE";
-                
                 Stack attrStack =classNameAttrsMap.get(className);
                 
                 for(int y =0; y < attrStack.size(); y++){
@@ -812,7 +846,8 @@ public class HuaweiMMLParser {
             //Add the parameter values 
             Stack attrStack;
             attrStack = classNameAttrsMap.get(moName);
-            
+
+
             Iterator <String> sIter = attrStack.iterator();
             while(sIter.hasNext()){
                 String pName = sIter.next();
@@ -828,7 +863,7 @@ public class HuaweiMMLParser {
                 String mvParameter = moName + "_" + pName;
                 
                 String pValue = "";
-                
+            
                 if( parameterChildMap.containsKey(mvParameter)){
                     
                     //Fix for bug where parser can't tell if parametr is multivalued or not
@@ -955,7 +990,8 @@ public class HuaweiMMLParser {
                 Stack attrStack = new Stack();
                 
                 //Get the parameters
-                String [] paramPartArray = paramPart.split(", ");
+                //String [] paramPartArray = paramPart.split(", ");
+                String [] paramPartArray = paramPart.split("(?<=[^=]+),\\s(?=[^=^\"]+=[^=]+)");
                 for(int i = 0, len = paramPartArray.length; i < len; i++){
                     String [] sArray = paramPartArray[i].split("=");
                     String paramName = sArray[0].trim();
@@ -970,8 +1006,10 @@ public class HuaweiMMLParser {
                     }
                     
                     //Collect multivalue parameters 
+                    //Skip/ignore parameters that end with NAME such GSMCELLNAME. The reason for this is 
+                    //when there is hypen the parser was mistakenly treating the parameter has multivalued
                     String tempValue  = sArray[1].trim();
-                    if(tempValue.matches("([^-]+-[^-]+&).*")  ){
+                    if(tempValue.matches("([^-]+-[^-]+&).*") && !paramName.endsWith("NAME")){
                         String mvParameter = className + "_" + paramName;
                         
                         
@@ -1060,8 +1098,10 @@ public class HuaweiMMLParser {
                         attrStack.push(pName);
 
                         //Handle multivalued parameter or parameters with children
+                        //Skip/ignore parameters that end with NAME such GSMCELLNAME. The reason for this is 
+                        //when there is hypen the parser was mistakenly treating the parameter has multivalued
                         String tempValue = attrValueMap.get(pName);
-                        if(tempValue.matches("([^-]+-[^-]+&).*") ){
+                        if(tempValue.matches("([^-]+-[^-]+&).*") && !pName.endsWith("NAME")){
                             String mvParameter = className + "_" + pName;
                             parameterChildMap.put(mvParameter, null);
                             Stack children = new Stack();
